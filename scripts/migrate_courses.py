@@ -1,0 +1,339 @@
+#!/usr/bin/env python3
+# migrate_courses.py
+
+import psycopg2
+from psycopg2 import sql
+import os
+# from dotenv import load_dotenv # Раскомментируй, если будешь использовать .env
+
+# --- 1. Загрузка переменных окружения (опционально) ---
+# load_dotenv() # Раскомментируй, если используешь .env файл
+
+# --- 2. Конфигурация подключения к БД ---
+# Вариант 1: Использование отдельных переменных окружения (как в .env или напрямую)
+DB_HOST = os.getenv('DB_HOST', 'localhost') # Docker expose'ит порт на localhost
+DB_PORT = os.getenv('DB_PORT', '5432')
+DB_NAME = os.getenv('DB_NAME', 'red_code_db')
+DB_USER = os.getenv('DB_USER', 'crutoi_boss')
+DB_PASSWORD = os.getenv('DB_PASSWORD', '52Dyanks~vJTEdKC')
+
+# --- 3. Данные курсов (СКОПИРОВАНО ИЗ courseData.js) ---
+# ВАЖНО: Убедись, что это правильный Python-словарь.
+# Все ключи-строки должны быть в кавычках.
+# Все значения-строки должны быть в кавычках.
+# Убраны лишние пробелы в начале/конце строк, особенно URL'ов.
+course_data = {
+  "1": {
+    "title": "Python",
+    "courses": [
+      {
+        "name": '"Поколение Python": курс для начинающих',
+        "link": 'https://stepik.org/course/58852/syllabus',
+        "description": '"Поколение Python: курс для начинающих" знакомит с основными типами данных, конструкциями и принципами структурного программирования языка Python.',
+        "image": 'https://cdn.stepik.net/media/cache/images/courses/58852/cover_ZP5DuRM/4951fdb332a542d0a2fe70692976e557.png'
+      },
+      {
+        "name": '"Поколение Python": курс для продвинутых',
+        "link": 'https://stepik.org/course/68343/promo',
+        "description": 'Курс знакомит с такими возможностями языка Python, как двумерные массивы, кортежи, множества, словари и многое другое.',
+        "image": 'https://cdn.stepik.net/media/cache/images/courses/68343/cover_xAgB0QZ/e1ec4a8a7903731d611952d63b4b782f.png'
+      },
+      {
+        "name": 'Инди-курс программирования на Python',
+        "link": 'https://stepik.org/course/63085/syllabus',
+        "description": 'Добро пожаловать на «Инди-курс программирования на Python» — курс, который стал выбором тысяч учеников и продолжает развиваться вместе с миром python!',
+        "image": 'https://cdn.stepik.net/media/cache/images/courses/63085/cover_eig1Jqm/1e06c59e71b23ef2294f0bfea1a6e118.jpg'
+      },
+      {
+        "name": 'Добрый, добрый Python',
+        "link": 'https://stepik.org/course/100707/promo?search=7321262565',
+        "description": 'Этот курс позволит вам изучить основы программирования на языке Python, начиная с самых азов и заканчивая довольно серьезными конструкциями',
+        "image": 'https://cdn.stepik.net/media/cache/images/courses/100707/cover_K4JOB7c/6c361261be53b501e6ba814dcc659222.png'
+      },
+      {
+        "name": 'HackInScience',
+        "link": 'https://www.hackinscience.org/',
+        "description": 'Это бесплатная и открытая платформа для практики программирования на Python.',
+        "image": ''
+      },
+      {
+        "name": 'Python Cheatsheet',
+        "link": 'https://www.pythoncheatsheet.org/',
+        "description": 'Здесь собраны ключевые конструкции языка, приёмы работы с коллекциями, генераторы, контекстные менеджеры, async/await, f-строки и многое другое — без воды и с реальными примерами.',
+        "image": 'https://raw.githubusercontent.com/wilfredinni/python-cheatsheet/refs/heads/master/public/logo-light.svg'
+      },
+    ]
+  },
+  "2": {
+    "title": "SQL",
+    "courses": [
+      {
+        "name": 'Интерактивный тренажёр по SQL',
+        "link": 'https://stepik.org/course/63054/info',
+        "description": 'В курсе большинство шагов — это практические задания на создание SQL-запросов.',
+        "image": 'https://cdn.stepik.net/media/cache/images/courses/63054/cover_foIuz1t/6bc976a3abd69e9e3e5163a5973a8ccf.jpg'
+      },
+      {
+        "name": 'SQLtest.online',
+        "link": 'https://sqltest.online/',
+        "description": 'Бесплатный онлайн-тренажёр для практики SQL-запросов прямо в браузере.',
+        "image": 'https://habrastorage.org/r/w780/getpro/habr/upload_files/6a5/2f3/b75/6a52f3b7557ce14f79c4ba784406dbc8.png'
+      },
+      {
+        "name": 'SQL Tutorial, SQLZoo',
+        "link": 'https://sqlzoo.net/wiki/SQL_Tutorial',
+        "description": 'Бесплатный ресурс с интерактивными уроками и практическими задачами.',
+        "image": 'https://sqlzoo.net/static/malones.svg'
+      }
+    ]
+  },
+  "3": {
+    "title": "JavaScript",
+    "courses": [
+      {
+        "name": 'JavaScript.info',
+        "link": 'https://javascript.info/',
+        "description": 'Современный учебник по JavaScript от основ до продвинутых тем.',
+        "image": 'https://javascript.info/img/site-logo.svg'
+      },
+      {
+        "name": 'freeCodeCamp JavaScript',
+        "link": 'https://www.freecodecamp.org/learn/javascript-algorithms-and-data-structures-v8/',
+        "description": 'Бесплатные курсы и практика алгоритмов на JavaScript.',
+        "image": 'https://placehold.co/300x200?text=fcc+JS'
+      },
+      {
+        "name": 'W3Schools JS Tutorial',
+        "link": 'https://www.w3schools.com/js/',
+        "description": 'Классический справочник и руководство по JavaScript.',
+        "image": 'https://placehold.co/300x200?text=W3Schools+JS'
+      },
+      {
+        "name": 'JSRobot',
+        "link": 'https://tantemalkah.at/jsrobot/',
+        "description": 'Небольшая игра, в которой вам предстоит управлять роботом с помощью Javascript для преодоления препятствий и решения головоломок.',
+        "image": 'https://tantemalkah.at/jsrobot/images/robotbig.png'
+      },
+    ]
+  },
+  "4": {
+    "title": "React",
+    "courses": [
+      {
+        "name": 'React Official Docs',
+        "link": 'https://react.dev/learn',
+        "description": 'Официальная документация React. Лучший источник знаний о библиотеке.',
+        "image": 'https://react.dev/images/branding/react-vertical-white-2023.svg'
+      },
+      {
+        "name": 'freeCodeCamp React',
+        "link": 'https://www.freecodecamp.org/learn/front-end-development-libraries/#sass:~:text=9%20challenges%20completed-,React,-React%20is%20a',
+        "description": 'Курс за час: всё самое важное о React для начинающих.',
+        "image": 'https://placehold.co/300x200?text=fcc+React'
+      },
+      {
+        "name": 'React Tutorial w3schools',
+        "link": 'https://www.w3schools.com/REACT/DEFAULT.ASP',
+        "description": 'курс для начинающих разработчиков на React.',
+        "image": 'https://placehold.co/300x200?text=Wes+Bos'
+      }
+    ]
+  },
+  "5": {
+    "title": "Data Science",
+    "courses": [
+      {
+        "name": 'Kaggle Learn',
+        "link": 'https://www.kaggle.com/learn',
+        "description": 'Бесплатные курсы по машинному обучению и анализу данных.',
+        "image": 'https://storage.googleapis.com/kaggle-datasite/images/Kaggle_Logo_2022.png'
+      },
+      {
+        "name": 'Введение в Data Science и машинное обучение',
+        "link": 'https://stepik.org/course/4852/info',
+        "description": 'Познакомимся с такими методами машинного обучения как деревья решений и нейронные сети.',
+        "image": 'https://cdn.stepik.net/media/cache/images/courses/4852/cover_R0OtNuB/e51489363d079b8830367935563887e8.jpg'
+      },
+      {
+        "name": 'Нейронные сети',
+        "link": 'https://stepik.org/course/401/promo',
+        "description": 'В рамках данного курса слушатели познакомятся с теоретическими и практическими основами искусственных нейронных сетей.',
+        "image": ''
+      }
+    ]
+  },
+  "6": {
+    "title": "DevOps",
+    "courses": [
+      {
+        "name": 'курс от канала «Из сисадмина в DevOps»',
+        "link": 'https://www.youtube.com/playlist?list=PLQoP6S9f51EZM0-WqAWAAkwAB28gnWkTb',
+        "description": 'Изучение основного стека',
+        "image": ''
+      },
+      {
+        "name": 'курсы от канала «Cisco Ne Slabo / Sedicomm TV»',
+        "link": 'https://www.youtube.com/playlist?list=PLMiVLClzZDbSQTrwRHSeGR6H7vcsv7WuS',
+        "description": 'Изучение основного стека',
+        "image": ''
+      }
+    ]
+  },
+  "7": {
+    "title": "Другое",
+    "courses": [
+      {
+        "name": 'Сайт с документацией',
+        "link": 'https://devdocs.io/',
+        "description": 'Собрана вся нужная документация по языкам, библиотекам и фреймворкам в одном месте.',
+        "image": ''
+      },
+      {
+        "name": 'Более 70 алгоритмов на Java, C++ и JavaScript c визуализацией',
+        "link": 'https://algorithm-visualizer.org/',
+        "description": ' Более 70 алгоритмов на Java, C++ и JavaScript c визуализацией',
+        "image": 'https://raw.githubusercontent.com/algorithm-visualizer/algorithm-visualizer/master/branding/screenshot.png'
+      },
+      {
+        "name": 'Quick Reference',
+        "link": 'https://quickref.me/',
+        "description": ' это компактная и понятная шпаргалка по самым популярным языкам и технологиям. Только чёткие примеры для быстрого освежения знаний и экономии времени.',
+        "image": ''
+      },
+    ]
+  },
+  "8": {
+    "title": "C++",
+    "courses": [
+      {
+        "name": 'Основы программирования на C++',
+        "link": 'https://stepik.org/course/182643/promo',
+        "description": 'Этот курс - ваш идеальный старт в программировании и/или освоении языка C++. Вы изучите основы алгоритмов, работу с массивами, текстом, функциям и файлами.',
+        "image": 'https://cdn.stepik.net/media/cache/images/courses/182643/cover_JJ2OSCE/d89acd14c32f6cbeb300def319c088da.png'
+      },
+    ]
+  }
+}
+# --- Конец данных курсов ---
+
+def connect_to_db():
+    """Создает и возвращает соединение с БД."""
+    try:
+        conn = psycopg2.connect(
+            host=DB_HOST,
+            port=DB_PORT,
+            database=DB_NAME,
+            user=DB_USER,
+            password=DB_PASSWORD
+        )
+        print("Успешное подключение к базе данных.")
+        return conn
+    except Exception as e:
+        print(f"Ошибка подключения к базе данных: {e}")
+        raise
+
+def create_tables_if_not_exist(conn):
+    """Создает таблицы categories и courses, если они не существуют."""
+    try:
+        with conn.cursor() as cur:
+            # Создание таблицы категорий
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS course_categories (
+                    id SERIAL PRIMARY KEY,
+                    title VARCHAR(255) UNIQUE NOT NULL
+                );
+            """)
+            print("Таблица 'course_categories' проверена/создана.")
+
+            # Создание таблицы курсов
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS courses (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    link TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    image TEXT, -- Может быть NULL
+                    category_id INTEGER NOT NULL REFERENCES course_categories(id) ON DELETE CASCADE
+                );
+            """)
+            print("Таблица 'courses' проверена/создана.")
+
+            conn.commit()
+    except Exception as e:
+        print(f"Ошибка при создании таблиц: {e}")
+        conn.rollback()
+        raise
+
+def insert_data(conn, data):
+    """Вставляет данные категорий и курсов в БД."""
+    try:
+        with conn.cursor() as cur:
+            # Сначала вставляем категории, сохраняя их ID из courseData.js как title_id
+            # для последующего сопоставления
+            category_mapping = {}
+            sorted_categories = sorted(data.items(), key=lambda x: int(x[0]))
+
+            for category_id_str, category_info in sorted_categories:
+                title = category_info['title']
+                # Вставляем категорию
+                cur.execute(
+                    "INSERT INTO course_categories (title) VALUES (%s) ON CONFLICT (title) DO NOTHING RETURNING id;",
+                    (title,)
+                )
+                result = cur.fetchone()
+                if result:
+                    # Если категория была вставлена, получаем её ID
+                    db_category_id = result[0]
+                else:
+                    # Если категория уже существовала, получаем её ID
+                    cur.execute("SELECT id FROM course_categories WHERE title = %s;", (title,))
+                    db_category_id = cur.fetchone()[0]
+                
+                category_mapping[category_id_str] = db_category_id
+                print(f"  Категория '{title}' обработана с ID {db_category_id}")
+
+            # Затем вставляем курсы
+            for category_id_str, category_info in sorted_categories:
+                db_category_id = category_mapping[category_id_str]
+                for course in category_info['courses']:
+                    # Очищаем URL от лишних пробелов
+                    link = course['link'].strip()
+                    image = course['image'].strip() if course['image'] else None
+                    # Вставляем курс
+                    cur.execute("""
+                        INSERT INTO courses (name, link, description, image, category_id)
+                        VALUES (%s, %s, %s, %s, %s)
+                        ON CONFLICT DO NOTHING; -- Предотвращает дубликаты при повторном запуске
+                    """, (
+                        course['name'],
+                        link,
+                        course['description'],
+                        image,
+                        db_category_id
+                    ))
+                    print(f"    Добавлен курс: {course['name']}")
+
+            conn.commit()
+            print("\nВсе данные успешно вставлены!")
+    except Exception as e:
+        print(f"Ошибка при вставке данных: {e}")
+        conn.rollback()
+        raise
+
+def main():
+    """Основная функция скрипта."""
+    print("Начинаем миграцию данных курсов...")
+    conn = None
+    try:
+        conn = connect_to_db()
+        create_tables_if_not_exist(conn)
+        insert_data(conn, course_data)
+    except Exception as e:
+        print(f"Миграция завершена с ошибкой: {e}")
+    finally:
+        if conn:
+            conn.close()
+            print("Соединение с базой данных закрыто.")
+
+if __name__ == "__main__":
+    main()
