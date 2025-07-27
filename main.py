@@ -15,11 +15,15 @@ app = FastAPI(title="Admin API", version="1.0.0")
 # Расширенная CORS настройка
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=[
+        "https://xn----7sbnsddslml5i.xn--p1ai",  # ваш домен
+        "https://красный-код.рф",                 # ваш домен (если работает)
+        "http://localhost:5173",                 # для локальной разработки
+        "http://127.0.0.1:5173"                  # для локальной разработки
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["Access-Control-Allow-Origin"]
 )
 
 # Подключаем роутеры
