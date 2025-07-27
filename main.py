@@ -9,7 +9,7 @@ import uvicorn
 # Импорты для работы с БД
 from database import create_tables
 # Импорты роутеров
-from routers import courses, auth # auth.py тоже существует
+from routers import courses
 
 from config import settings
 from security import authenticate_admin, create_access_token, verify_token
