@@ -33,8 +33,6 @@ app.add_middleware(
 
 # Подключаем роутеры
 # Роутер auth НЕ использует префикс /api, так как пути в нем определены напрямую
-# и Nginx проксирует /api/auth/* в корень приложения
-app.include_router(auth.router) 
 # Роутер courses использует префикс /api
 app.include_router(courses.router, prefix="/api")
 
