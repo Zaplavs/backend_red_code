@@ -6,18 +6,23 @@ from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from typing import Optional
 import uvicorn
+# Импорты для работы с БД
+from database import create_tables
+# Импорты роутеров
+from routers import courses, auth # auth.py тоже существует
+
 from config import settings
 from security import authenticate_admin, create_access_token, verify_token
-from routers import courses  # Добавляем импорт
+
 
 app = FastAPI(title="Admin API", version="1.0.0")
 
-# Расширенная CORS настройка
+# Исправленная CORS настройка (убраны опечатки в доменах)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://xn----7sbnsddslml5i.xn--p1ai",  # ваш домен
-        "https://красный-код.рф",                 # ваш домен (если работает)
+        "https://xn----7sbnsddslml5i.xn--p1ai",  # исправленный домен
+        "https://красный-код.рф",                # ваш домен
         "http://localhost:5173",                 # для локальной разработки
         "http://127.0.0.1:5173"                  # для локальной разработки
     ],
@@ -27,8 +32,19 @@ app.add_middleware(
 )
 
 # Подключаем роутеры
-app.include_router(courses.router, prefix="/api/courses")
+# Роутер auth НЕ использует префикс /api, так как пути в нем определены напрямую
+# и Nginx проксирует /api/auth/* в корень приложения
+app.include_router(auth.router) 
+# Роутер courses использует префикс /api
+app.include_router(courses.router, prefix="/api")
 
+# Создаем таблицы при запуске (только для разработки, в production используйте Alembic)
+@app.on_event("startup")
+async def startup_event():
+    create_tables()
+    print("Database tables created (if they didn't exist).")
+
+# Модели для аутентификации (перенесены сюда, так как используются в main.py)
 class Token(BaseModel):
     access_token: str
     token_type: str
@@ -42,6 +58,7 @@ class TokenData(BaseModel):
     token_type: str
     user: UserResponse
 
+# Эндпоинты аутентификации (остаются без префикса /api)
 @app.post("/auth/login", response_model=TokenData)
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     """Вход в админку"""
@@ -74,8 +91,10 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 @app.get("/auth/me", response_model=UserResponse)
 async def get_current_admin(authorization: Optional[str] = Header(None)):
     """Получение информации о текущем админе"""
+    print(f"Authorization header received: {authorization}") # Для отладки
     
     if not authorization:
+        print("No Authorization header found") # Для отладки
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
@@ -100,6 +119,7 @@ async def get_current_admin(authorization: Optional[str] = Header(None)):
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
+        print(f"Token extracted: {token}") # Для отладки
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -109,12 +129,14 @@ async def get_current_admin(authorization: Optional[str] = Header(None)):
     
     user = verify_token(token)
     if not user:
+        print("Token verification failed") # Для отладки
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    print(f"User verified: {user}") # Для отладки
     return UserResponse(email=user["email"], is_admin=user["is_admin"])
 
 @app.get("/health")

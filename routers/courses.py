@@ -1,84 +1,111 @@
 # backend/routers/courses.py
-from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel, RootModel
-from typing import List, Dict, Any, Optional
-import json
-import os
+from fastapi import APIRouter, HTTPException, status, Depends
+from sqlalchemy.orm import Session
+from typing import List
+from schemas.course import CourseCategoryCreate, CourseCategoryUpdate, CourseCategoryInDB, CourseCreate, CourseUpdate, CourseInDB
+from models.course import CourseCategory, Course
+from database import get_db
 
 router = APIRouter(prefix="/courses", tags=["courses"])
 
-# Путь к файлу с данными курсов
-COURSE_DATA_FILE = "course_data.json"
+# --- Операции с категориями ---
 
-# Модели данных
-class Course(BaseModel):
-    name: str
-    link: str
-    description: str
-    image: str
+@router.get("/categories/", response_model=List[CourseCategoryInDB])
+def read_categories(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    categories = db.query(CourseCategory).offset(skip).limit(limit).all()
+    return categories
 
-class CourseCategory(BaseModel):
-    title: str
-    courses: List[Course]
+@router.post("/categories/", response_model=CourseCategoryInDB, status_code=status.HTTP_201_CREATED)
+def create_category(category: CourseCategoryCreate, db: Session = Depends(get_db)):
+    db_category = CourseCategory(title=category.title)
+    db.add(db_category)
+    db.commit()
+    db.refresh(db_category)
+    return db_category
 
-class CourseData(RootModel[Dict[str, CourseCategory]]):
-    pass
-
-# Функции для работы с файлом данных
-def load_course_data():
-    """Загружает данные курсов из файла"""
-    if os.path.exists(COURSE_DATA_FILE):
-        with open(COURSE_DATA_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    else:
-        # Если файл не существует, создаем пустой
-        return {}
-
-def save_course_data(data: dict):
-    """Сохраняет данные курсов в файл"""
-    with open(COURSE_DATA_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-
-# Эндпоинты
-@router.get("/", response_model=Dict[str, Any])
-async def get_all_courses():
-    """Получить все курсы"""
-    return load_course_data()
-
-@router.get("/{category_id}", response_model=CourseCategory)
-async def get_category(category_id: str):
-    """Получить категорию курсов по ID"""
-    data = load_course_data()
-    if category_id not in data:
+@router.get("/categories/{category_id}", response_model=CourseCategoryInDB)
+def read_category(category_id: int, db: Session = Depends(get_db)):
+    db_category = db.query(CourseCategory).filter(CourseCategory.id == category_id).first()
+    if db_category is None:
         raise HTTPException(status_code=404, detail="Category not found")
-    return data[category_id]
+    return db_category
 
-@router.post("/", response_model=Dict[str, Any])
-async def create_category(category: CourseCategory):
-    """Создать новую категорию курсов"""
-    data = load_course_data()
-    # Генерируем новый ID
-    new_id = str(max([int(k) for k in data.keys()] + [0]) + 1) if data else "1"
-    data[new_id] = category.model_dump()
-    save_course_data(data)
-    return {"id": new_id, **category.model_dump()}
-
-@router.put("/{category_id}", response_model=CourseCategory)
-async def update_category(category_id: str, category: CourseCategory):
-    """Обновить категорию курсов"""
-    data = load_course_data()
-    if category_id not in data:
+@router.put("/categories/{category_id}", response_model=CourseCategoryInDB)
+def update_category(category_id: int, category: CourseCategoryUpdate, db: Session = Depends(get_db)):
+    db_category = db.query(CourseCategory).filter(CourseCategory.id == category_id).first()
+    if db_category is None:
         raise HTTPException(status_code=404, detail="Category not found")
-    data[category_id] = category.model_dump()
-    save_course_data(data)
-    return category
+    for key, value in category.model_dump().items():
+        setattr(db_category, key, value)
+    db.commit()
+    db.refresh(db_category)
+    return db_category
 
-@router.delete("/{category_id}")
-async def delete_category(category_id: str):
-    """Удалить категорию курсов"""
-    data = load_course_data()
-    if category_id not in data:
+@router.delete("/categories/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_category(category_id: int, db: Session = Depends(get_db)):
+    db_category = db.query(CourseCategory).filter(CourseCategory.id == category_id).first()
+    if db_category is None:
         raise HTTPException(status_code=404, detail="Category not found")
-    del data[category_id]
-    save_course_data(data)
-    return {"message": "Category deleted successfully"}
+    db.delete(db_category)
+    db.commit()
+    return
+
+# --- Операции с курсами ---
+
+@router.get("/", response_model=List[CourseInDB])
+def read_courses(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    courses = db.query(Course).offset(skip).limit(limit).all()
+    return courses
+
+@router.post("/", response_model=CourseInDB, status_code=status.HTTP_201_CREATED)
+def create_course(course: CourseCreate, category_id: int, db: Session = Depends(get_db)):
+    # Проверяем, существует ли категория
+    db_category = db.query(CourseCategory).filter(CourseCategory.id == category_id).first()
+    if db_category is None:
+        raise HTTPException(status_code=404, detail="Category not found")
+        
+    db_course = Course(
+        name=course.name,
+        link=course.link,
+        description=course.description,
+        image=course.image,
+        category_id=category_id
+    )
+    db.add(db_course)
+    db.commit()
+    db.refresh(db_course)
+    return db_course
+
+@router.get("/{course_id}", response_model=CourseInDB)
+def read_course(course_id: int, db: Session = Depends(get_db)):
+    db_course = db.query(Course).filter(Course.id == course_id).first()
+    if db_course is None:
+        raise HTTPException(status_code=404, detail="Course not found")
+    return db_course
+
+@router.put("/{course_id}", response_model=CourseInDB)
+def update_course(course_id: int, course: CourseUpdate, db: Session = Depends(get_db)):
+    db_course = db.query(Course).filter(Course.id == course_id).first()
+    if db_course is None:
+        raise HTTPException(status_code=404, detail="Course not found")
+    for key, value in course.model_dump().items():
+        setattr(db_course, key, value)
+    db.commit()
+    db.refresh(db_course)
+    return db_course
+
+@router.delete("/{course_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_course(course_id: int, db: Session = Depends(get_db)):
+    db_course = db.query(Course).filter(Course.id == course_id).first()
+    if db_course is None:
+        raise HTTPException(status_code=404, detail="Course not found")
+    db.delete(db_course)
+    db.commit()
+    return
+
+# --- Получение всех категорий с курсами (для фронтенда) ---
+@router.get("/with-courses/", response_model=List[CourseCategoryInDB])
+def read_categories_with_courses(db: Session = Depends(get_db)):
+    """Получить все категории вместе с их курсами"""
+    categories = db.query(CourseCategory).all()
+    return categories
