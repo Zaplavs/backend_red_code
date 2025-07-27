@@ -6,6 +6,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from typing import Optional
 import uvicorn
+from routers import courses 
 # Импорты для работы с БД
 from database import create_tables
 # Импорты роутеров
@@ -16,7 +17,7 @@ from security import authenticate_admin, create_access_token, verify_token
 
 
 app = FastAPI(title="Admin API", version="1.0.0")
-
+app.include_router(courses.router)
 # Исправленная CORS настройка (убраны опечатки в доменах)
 app.add_middleware(
     CORSMiddleware,
