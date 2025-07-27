@@ -42,7 +42,7 @@ class TokenData(BaseModel):
     token_type: str
     user: UserResponse
 
-@app.post("/api/auth/login", response_model=TokenData)
+@app.post("/auth/login", response_model=TokenData)
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     """Вход в админку"""
     # Проверяем grant_type
@@ -71,7 +71,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         user=UserResponse(email=user["email"], is_admin=user["is_admin"])
     )
 
-@app.get("/api/auth/me", response_model=UserResponse)
+@app.get("/auth/me", response_model=UserResponse)
 async def get_current_admin(authorization: Optional[str] = Header(None)):
     """Получение информации о текущем админе"""
     
@@ -117,7 +117,7 @@ async def get_current_admin(authorization: Optional[str] = Header(None)):
     
     return UserResponse(email=user["email"], is_admin=user["is_admin"])
 
-@app.get("/api/health")
+@app.get("/health")
 async def health_check():
     return {"status": "healthy"}
 
