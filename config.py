@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     # Новые настройки для базы данных
+    DATABASE_URL: str
     DB_HOST: str = "localhost"
     DB_PORT: str = "5432"
     DB_NAME: str
